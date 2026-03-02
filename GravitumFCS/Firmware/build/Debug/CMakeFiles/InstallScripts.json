@@ -1,8 +1,0 @@
-{
-	"InstallScripts" : 
-	[
-		"/home/breno/dev/Gravitum/GravitumFCS/Firmware/build/Debug/cmake_install.cmake",
-		"/home/breno/dev/Gravitum/GravitumFCS/Firmware/build/Debug/cmake/stm32cubemx/cmake_install.cmake"
-	],
-	"Parallel" : false
-}
