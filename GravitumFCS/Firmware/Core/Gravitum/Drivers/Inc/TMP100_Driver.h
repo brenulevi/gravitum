@@ -6,7 +6,6 @@
 
 #include "I2C_Controller.h"
 
-/* TMP100 Register Addresses */
 static const uint8_t TMP100_REG_ADDR_TEMP = 0x00;
 static const uint8_t TMP100_REG_ADDR_CONFIG = 0x01;
 
