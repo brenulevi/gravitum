@@ -1,0 +1,17 @@
+# build artefacts
+/build/
+/build/**
+
+# CMake / IDE / tool files
+/.cmake/
+/.vscode/
+/Debug/
+/*.o
+*.obj
+*.elf
+*.map
+*.bin
+*.hex
+
+# clangd / cache
+/.cache/clangd/

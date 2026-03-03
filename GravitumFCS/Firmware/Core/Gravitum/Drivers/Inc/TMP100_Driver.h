@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <string.h>
 
 #include "I2C_Controller.h"
 
@@ -13,13 +14,15 @@ typedef enum TMP100_Resolution {
   TMP100_RES_9_BIT = 0x00,
   TMP100_RES_10_BIT = 0x01,
   TMP100_RES_11_BIT = 0x02,
-  TMP100_RES_12_BIT = 0x03
+  TMP100_RES_12_BIT = 0x03,
+  TMP100_RES_INVALID = 0xFF
 } TMP100_Resolution;
 
 /* TMP100 Driver Structure */
 typedef struct TMP100_Driver {
   uint8_t i2c_address;     /* I2C Slave Address (0x48-0x4F) */
   I2C_Controller *i2c_bus; /* Pointer to I2C_Controller instance */
+  TMP100_Resolution resolution; /* Current resolution setting */
   float resolution_factor; /* Temperature resolution factor based on config */
 } TMP100_Driver;
 
