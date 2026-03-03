@@ -24,6 +24,7 @@
 #include "I2C_Controller.h"
 #include "TMP100_Driver.h"
 #include "BMP581_Driver.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -140,13 +141,10 @@ int main(void) {
     Error_Handler();
   }
 
-  if (TMP100_Driver_SetResolution(&tmp100_driver, TMP100_RES_12_BIT) !=
-      0) {
-    // Handle resolution setting error
+  if (BMP581_Driver_Init(&bmp581_driver, &i2c1_controller, 0x46) != 0) {
+    // Handle initialization error
     Error_Handler();
   }
-
-
 
   /* USER CODE END 2 */
 
@@ -154,9 +152,17 @@ int main(void) {
   /* USER CODE BEGIN WHILE */
   while (1) {
 
-    float temperature = 0.0f;
-    if (TMP100_Driver_ReadTemp(&tmp100_driver, &temperature) == 0) {
-      // Successfully read temperature, can use 'temperature' variable
+    float tmp100_temp = 0.0f;
+    if (TMP100_Driver_ReadTemp(&tmp100_driver, &tmp100_temp) == 0) {
+      // Successfully read temperature, can use 'tmp100_temp' variable
+    } else {
+      // Handle read error
+    }
+
+    float bmp581_temp = 0.0f;
+    float pressure = 0.0f;
+    if (BMP581_Driver_ReadTempAndPressure(&bmp581_driver, &bmp581_temp, &pressure) == 0) {
+      // Successfully read pressure and temperature, can use 'bmp581_temp' and 'pressure' variables
     } else {
       // Handle read error
     }
