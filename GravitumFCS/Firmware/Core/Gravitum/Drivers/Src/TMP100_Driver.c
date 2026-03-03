@@ -1,96 +1,86 @@
 #include "TMP100_Driver.h"
+#include "I2C_Controller.h"
 
-int TMP100_Driver_Init(TMP100_Driver *driver, I2C_Controller *i2c_bus,
-                       uint8_t i2c_address) {
-  if (driver == NULL || i2c_bus == NULL) {
-    return -1;
-  }
+int TMP100_Driver_Init(TMP100_Driver* driver, I2C_Controller* i2c_controller, uint16_t addr)
+{
+    if (driver == NULL || i2c_controller == NULL)
+    {
+        return -1;
+    }
 
-  driver->i2c_address = i2c_address;
-  driver->i2c_bus = i2c_bus;
+    driver->i2c_controller = i2c_controller;
+    driver->addr = addr;
+    driver->resolution = TMP100_RES_12_BIT; // Default resolution
+    driver->last_temperature = 0.0f;
 
-  /* Set default resolution to 12-bit */
-  TMP100_Driver_SetResolution(driver, TMP100_RES_12_BIT);
+    // Set default resolution in the sensor
+    return TMP100_Driver_SetResolution(driver, driver->resolution);
 
-  return 0;
+    return 0;
 }
 
-int TMP100_Driver_ReadTemp(TMP100_Driver *driver, float *temp) {
-  if (driver == NULL || temp == NULL || driver->i2c_bus == NULL) {
-    return -1;
-  }
+int TMP100_Driver_ReadTemperature(TMP100_Driver* driver, float* temperature)
+{
+    if (driver == NULL || temperature == NULL)
+    {
+        return -1;
+    }
 
-  uint8_t temp_data[2] = {0};
+    uint8_t temp_data[2];
+    if (I2C_Controller_BlockingMemRead(driver->i2c_controller, driver->addr, TMP100_REG_TEMP, temp_data, 2, 1000) != HAL_OK)
+    {
+        return -1; // Read failed
+    }
 
-  /* Read 2 bytes from temperature register */
-  int ret = I2C_Controller_Read(driver->i2c_bus, driver->i2c_address,
-                                TMP100_REG_ADDR_TEMP, temp_data, 2);
+    driver->raw_temperature = (temp_data[0] << 8) | temp_data[1];
+    driver->raw_temperature >>= 4;
 
-  if (ret != 0) {
-    return -1;
-  }
+    *temperature = driver->raw_temperature * driver->conversion_factor;
+    driver->last_temperature = *temperature;
 
-  /* Convert raw data to temperature (TMP100 format: 12-bit, MSB first) */
-  int16_t raw_temp = ((int16_t)temp_data[0] << 4) | (temp_data[1] >> 4);
-  *temp =
-      raw_temp *
-      driver->resolution_factor; /* Apply resolution factor to get Celsius */
-
-  return 0;
+    return 0;
 }
 
-int TMP100_Driver_SetResolution(TMP100_Driver *driver, TMP100_Resolution bits) {
-  if (driver == NULL || driver->i2c_bus == NULL) {
-    return -1;
-  }
+int TMP100_Driver_SetResolution(TMP100_Driver* driver, TMP100_Resolution resolution)
+{
+    if (driver == NULL)
+    {
+        return -1;
+    }
 
-  uint8_t config_data = 0;
+    switch (resolution)
+    {
+        case TMP100_RES_9_BIT:
+            driver->conversion_factor = 0.5f;
+            break;
+        case TMP100_RES_10_BIT:
+            driver->conversion_factor = 0.25f;
+            break;
+        case TMP100_RES_11_BIT:
+            driver->conversion_factor = 0.125f;
+            break;
+        case TMP100_RES_12_BIT:
+            driver->conversion_factor = 0.0625f;
+            break;
+        default:
+            return -1; // Invalid resolution
+    }
 
-  int ret = I2C_Controller_Read(driver->i2c_bus, driver->i2c_address,
-                                TMP100_REG_ADDR_CONFIG, &config_data, 1);
-  if (ret != 0) {
-    return -1;
-  }
+    uint8_t config_data;
+    if (I2C_Controller_BlockingMemRead(driver->i2c_controller, driver->addr, TMP100_REG_CONFIG, &config_data, 1, 100) != HAL_OK)
+    {
+        return -1; // Read failed
+    }
 
-  /* Clear resolution bits (bits 5-6) and set new resolution */
-  config_data &= 0x9F; /* Clear bits 5-6 */
-  config_data |= (((uint8_t)bits) << 5);
+    config_data &= ~(0x03 << 5); // Clear resolution bits (bits 5 and 6)
+    config_data |= (resolution << 5); // Set new resolution
 
-  /* Write updated config */
-  ret = I2C_Controller_Write(driver->i2c_bus, driver->i2c_address,
-                             TMP100_REG_ADDR_CONFIG, &config_data, 1);
+    if (I2C_Controller_BlockingMemWrite(driver->i2c_controller, driver->addr, TMP100_REG_CONFIG, &config_data, 1, 1000) != HAL_OK)
+    {
+        return -1; // Write failed
+    }
 
-  if (ret != 0) {
-    return -1; /* I2C write failed */
-  }
+    driver->resolution = resolution;
 
-  driver->resolution = bits; /* Update driver state with new resolution */
-
-  /** Update resolution factor based on new resolution */
-  switch (bits) {
-    case TMP100_RES_9_BIT:
-      driver->resolution_factor = 0.5f;
-      break;
-    case TMP100_RES_10_BIT:
-      driver->resolution_factor = 0.25f;
-      break;
-    case TMP100_RES_11_BIT:
-      driver->resolution_factor = 0.125f;
-      break;
-    case TMP100_RES_12_BIT:
-      driver->resolution_factor = 0.0625f;
-      break;
-    default:
-      return -1; /* Invalid resolution */
-  }
-
-  return 0;
-}
-
-TMP100_Resolution TMP100_Driver_GetResolution(TMP100_Driver *driver) {
-  if (driver == NULL || driver->i2c_bus == NULL) {
-    return TMP100_RES_INVALID;
-  }
-
-  return driver->resolution;
+    return 0;
 }

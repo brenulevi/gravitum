@@ -46,7 +46,6 @@ target_link_directories(${CMAKE_PROJECT_NAME} PRIVATE
 target_sources(${CMAKE_PROJECT_NAME} PRIVATE
     # Add user sources here
     # Drivers
-    Core/Gravitum/Drivers/Src/TMP100_Driver.c
     # Systems
     Core/Gravitum/Systems/Src/I2C_Controller.c
 )

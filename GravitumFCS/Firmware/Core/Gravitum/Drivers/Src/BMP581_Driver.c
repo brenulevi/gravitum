@@ -1,81 +1,69 @@
 #include "BMP581_Driver.h"
-#include <stdint.h>
+#include "I2C_Controller.h"
 
-int BMP581_Driver_Init(BMP581_Driver *driver, I2C_Controller *i2c_bus,
-                       uint8_t i2c_address) {
-  if (driver == NULL || i2c_bus == NULL) {
-    return -1;
-  }
+int BMP581_Driver_Init(BMP581_Driver* driver, I2C_Controller* i2c_controller, uint16_t addr)
+{
+    if (driver == NULL || i2c_controller == NULL)
+    {
+        return -1;
+    }
 
-  driver->i2c_address = i2c_address;
-  driver->i2c_bus = i2c_bus;
+    driver->i2c_controller = i2c_controller;
+    driver->addr = addr;
+    
+    // Read chip ID to verify communication
+    uint8_t chip_id;
+    if (I2C_Controller_BlockingMemRead(driver->i2c_controller, driver->addr, BMP581_REG_CHIP_ID, &chip_id, 1, 100) != 0)
+    {
+        return -1;
+    }
 
-  if (BMP581_Driver_SetOutputDataRateRegister(driver, BMP581_ODR_120_HZ, BMP581_PM_NORMAL) != 0) {
-    driver->odr = BMP581_ODR_INVALID;
-    driver->power_mode = BMP581_PM_INVALID;
-    return -1;
-  }
+    driver->chip_id = chip_id;
 
-  return 0;
+    return 0;
 }
 
-int BMP581_Driver_ReadTempAndPressure(BMP581_Driver *driver, float *temp,
-                                      float *pressure) {
-  if (driver == NULL || temp == NULL || pressure == NULL) {
-    return -1;
-  }
+int BMP581_Driver_ReadTemperatureAndPressure(BMP581_Driver* driver, float* temperature, float* pressure)
+{
+    if (driver == NULL)
+    {
+        return -1;
+    }
 
-  uint8_t data[6]; // 3 bytes for temp, 3 bytes for pressure
-  if (I2C_Controller_Read(driver->i2c_bus, driver->i2c_address,
-                          BMP581_REG_ADDR_TEMP, data, sizeof(data)) != 0) {
-    return -1;
-  }
+    uint8_t temp_data[6];
+    if (I2C_Controller_BlockingMemRead(driver->i2c_controller, driver->addr, BMP581_REG_DATA, temp_data, 6, 100) != 0)
+    {
+        return -1;
+    }
 
-  int32_t temp_raw = (data[2] << 16) | (data[1] << 8) | data[0];
-  int32_t press_raw = (data[5] << 16) | (data[4] << 8) | data[3];
+    driver->raw_temperature = (temp_data[2] << 16) | (temp_data[1] << 8) | temp_data[0];
+    driver->raw_pressure = (temp_data[5] << 16) | (temp_data[4] << 8) | temp_data[3];
 
-  /* Manual Signal Extension */
-  if (temp_raw & 0x800000) {
-    temp_raw |= 0xFF000000;
-  }
+    driver->temperature = driver->raw_temperature >> 16;
+    driver->pressure = driver->raw_pressure >> 6;
 
-  *temp = (float) (temp_raw >> 16);
-  *pressure = (float) (press_raw >> 6);
+    *temperature = driver->temperature;
+    *pressure = driver->pressure;
 
-  return 0;
+    return 0;
 }
 
-int BMP581_Driver_SetOutputDataRateRegister(BMP581_Driver *driver, BMP581_OutputDataRate odr, BMP581_PowerMode pwr_mode) {
-  if (driver == NULL || driver->i2c_bus == NULL) {
-    return -1;
-  }
+int BMP581_Driver_SetConfiguration(BMP581_Driver* driver, BMP581_PowerMode power_mode, BMP581_OutputDataRate odr)
+{
+    if (driver == NULL)
+    {
+        return -1;
+    }
 
-  /* ODR is in bits 2:6 of the register */
-  /* Power Mode is in bits 0:1 of the register */
-  uint8_t odr_value = (((uint8_t)odr << 2) & 0x7C) | ((uint8_t)pwr_mode & 0x03);
+    uint8_t config_data = 0x00 | ((odr << 2) & 0x7C) | (power_mode & 0x03);
 
-  if (I2C_Controller_Write(driver->i2c_bus, driver->i2c_address,
-                           BMP581_REG_ADDR_ODR, &odr_value, 1) != 0) {
-    return -1;
-  }
+    if (I2C_Controller_BlockingMemWrite(driver->i2c_controller, driver->addr, BMP581_REG_ODR, &config_data, 1, 100) != 0) // Assuming config register is at 0x1F
+    {
+        return -1;
+    }
 
-  driver->odr = odr;
-  driver->power_mode = pwr_mode;
-  return 0; 
-}
+    driver->power_mode = power_mode;
+    driver->odr = odr;
 
-BMP581_OutputDataRate BMP581_Driver_GetOutputDataRate(BMP581_Driver *driver) {
-  if (driver == NULL || driver->i2c_bus == NULL) {
-    return BMP581_ODR_INVALID;
-  }
-
-  return driver->odr;
-}
-
-BMP581_PowerMode BMP581_Driver_GetPowerMode(BMP581_Driver *driver) {
-  if (driver == NULL || driver->i2c_bus == NULL) {
-    return BMP581_PM_INVALID;
-  }
-
-  return driver->power_mode;
+    return 0;
 }

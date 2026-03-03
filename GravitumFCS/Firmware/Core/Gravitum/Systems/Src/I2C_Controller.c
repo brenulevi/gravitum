@@ -1,80 +1,108 @@
 #include "I2C_Controller.h"
+#include "stm32f407xx.h"
+#include "stm32f4xx_hal_def.h"
+#include "stm32f4xx_hal_i2c.h"
+#include <stdint.h>
 
-int I2C_Controller_Init(I2C_Controller *controller, I2C_HandleTypeDef *hi2c, uint32_t timeout_ms)
+static I2C_Controller* i2c_controllers[3] = {NULL, NULL, NULL}; // Assuming 3 I2C peripherals
+
+int I2C_Controller_Init(I2C_Controller* controller, I2C_HandleTypeDef* hi2c)
 {
     if (controller == NULL || hi2c == NULL)
     {
-        return -1; /* Error: Invalid parameters */
+        return -1;
     }
-
     controller->hi2c = hi2c;
-    controller->timeout_ms = timeout_ms;
-    
-    return 0; /* Success */
+    controller->is_busy = 0;
+
+    if (hi2c->Instance == I2C1)
+        i2c_controllers[0] = controller;
+    else if (hi2c->Instance == I2C2)
+        i2c_controllers[1] = controller;
+    else if (hi2c->Instance == I2C3)
+        i2c_controllers[2] = controller;
+
+    return 0; // Success
 }
 
-int I2C_Controller_Read(I2C_Controller *controller, uint8_t slave_addr, 
-                        uint8_t reg_addr, uint8_t *data, uint16_t length)
+HAL_StatusTypeDef I2C_Controller_BlockingMemWrite(I2C_Controller* controller, uint16_t addr, uint16_t mem_addr, uint8_t* data, uint16_t size, uint32_t timeout)
 {
-    if (controller == NULL || controller->hi2c == NULL || data == NULL)
+    if (controller == NULL || data == NULL)
     {
-        return -1; /* Error: Invalid parameters */
+        return HAL_ERROR;
     }
 
-    /* Convert 7-bit address to 8-bit format (shift left by 1) */
-    uint8_t addr_8bit = slave_addr << 1;
-
-    /* Step 1: Write register address */
-    HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(controller->hi2c, addr_8bit, 
-                                                        &reg_addr, 1, controller->timeout_ms);
-    if (status != HAL_OK)
+    if (controller->is_busy)
     {
-        return -1; /* I2C transmit failed */
+        return HAL_BUSY;
     }
 
-    /* Step 2: Read data from register */
-    status = HAL_I2C_Master_Receive(controller->hi2c, addr_8bit, 
-                                    data, length, controller->timeout_ms);
-    if (status != HAL_OK)
-    {
-        return -1; /* I2C receive failed */
-    }
-
-    return 0; /* Success */
+    controller->is_busy = 1;
+    HAL_StatusTypeDef status = HAL_I2C_Mem_Write(controller->hi2c, addr << 1, mem_addr, I2C_MEMADD_SIZE_8BIT, data, size, timeout);
+    controller->is_busy = 0;
+    return status;
 }
 
-int I2C_Controller_Write(I2C_Controller *controller, uint8_t slave_addr,
-                         uint8_t reg_addr, uint8_t *data, uint16_t length)
+HAL_StatusTypeDef I2C_Controller_BlockingMemRead(I2C_Controller* controller, uint16_t addr, uint16_t mem_addr, uint8_t* data, uint16_t size, uint32_t timeout)
 {
-    if (controller == NULL || controller->hi2c == NULL || data == NULL)
+    if (controller == NULL || data == NULL)
     {
-        return -1; /* Error: Invalid parameters */
+        return HAL_ERROR;
     }
 
-    /* Convert 7-bit address to 8-bit format (shift left by 1) */
-    uint8_t addr_8bit = slave_addr << 1;
-
-    /* Prepare buffer: [register_addr | data[0] | data[1] | ... ] */
-    uint8_t buffer[256];  /* Max 256 bytes (reg + 255 bytes data) */
-    
-    if (length > 255)
+    if (controller->is_busy)
     {
-        return -1; /* Error: Data too large */
+        return HAL_BUSY;
     }
 
-    buffer[0] = reg_addr;
-    for (uint16_t i = 0; i < length; i++)
+    controller->is_busy = 1;
+    HAL_StatusTypeDef status = HAL_I2C_Mem_Read(controller->hi2c, addr << 1, mem_addr, I2C_MEMADD_SIZE_8BIT, data, size, timeout);
+    controller->is_busy = 0;
+
+    return status;
+}
+
+HAL_StatusTypeDef I2C_Controller_DMAWrite(I2C_Controller* controller, uint16_t addr, uint8_t* data, uint16_t size)
+{
+    if (controller == NULL || data == NULL)
     {
-        buffer[i + 1] = data[i];
+        return HAL_ERROR;
     }
 
-    /* Write register address + data in one transaction */
-    HAL_StatusTypeDef status = HAL_I2C_Master_Transmit(controller->hi2c, addr_8bit,
-                                                        buffer, length + 1, controller->timeout_ms);
+    if (controller->is_busy)
+    {
+        return HAL_BUSY;
+    }
+
+    controller->is_busy = 1;
+    HAL_StatusTypeDef status = HAL_I2C_Master_Transmit_DMA(controller->hi2c, addr, data, size);
+
     if (status != HAL_OK)
     {
-        return -1; /* I2C transmit failed */
+        controller->is_busy = 0; // Reset busy flag if DMA transfer initiation failed
     }
 
-    return 0; /* Success */
+    return status;
+}
+
+HAL_StatusTypeDef I2C_Controller_DMARead(I2C_Controller* controller, uint16_t addr, uint8_t* data, uint16_t size)
+{
+    if (controller == NULL || data == NULL)
+    {
+        return HAL_ERROR;
+    }
+
+    if (controller->is_busy)
+    {
+        return HAL_BUSY;
+    }
+
+    controller->is_busy = 1;
+    HAL_StatusTypeDef status = HAL_I2C_Master_Receive_DMA(controller->hi2c, addr, data, size);
+
+    if (status != HAL_OK)
+    {
+        controller->is_busy = 0; // Reset busy flag if DMA transfer initiation failed
+    }
+    return status;
 }
