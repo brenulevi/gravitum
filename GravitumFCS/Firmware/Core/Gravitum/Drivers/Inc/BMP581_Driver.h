@@ -37,9 +37,10 @@ typedef struct BMP581_Driver
     BMP581_OutputDataRate odr;
 
     int32_t raw_temperature;
-    float temperature;
     int32_t raw_pressure;
+
     float pressure;
+    float temperature;
 } BMP581_Driver;
 
 int BMP581_Driver_Init(BMP581_Driver* driver, I2C_Controller* i2c_controller, uint16_t addr);

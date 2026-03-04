@@ -35,19 +35,25 @@ int IIS2MDC_Driver_ReadMagnetometerAndTemperature(IIS2MDC_Driver* driver, float 
         return -1;
     }
 
-    int16_t raw_x = (mag_data[1] << 8) | mag_data[0];
-    int16_t raw_y = (mag_data[3] << 8) | mag_data[2];
-    int16_t raw_z = (mag_data[5] << 8) | mag_data[4];
+    driver->raw_x = (mag_data[1] << 8) | mag_data[0];
+    driver->raw_y = (mag_data[3] << 8) | mag_data[2];
+    driver->raw_z = (mag_data[5] << 8) | mag_data[4];
 
-    int16_t raw_temp = (mag_data[7] << 8) | mag_data[6];
-    driver->raw_temperature = raw_temp >> 4; // Temperature is 12-bit, so shift right by 4
+    driver->raw_temperature = (mag_data[7] << 8) | mag_data[6];
+    driver->raw_temperature >>= 4; // Temperature is 12-bit, so shift right by 4
 
     driver->temperature = driver->raw_temperature / 8.0f;
 
-    // Convert raw values to microteslas (assuming default sensitivity)
-    mag[0] = raw_x * 0.15f; // X-axis
-    mag[1] = raw_y * 0.15f; // Y-axis
-    mag[2] = raw_z * 0.15f; // Z-axis
+    // Convert raw values to microteslas
+    driver->mag[0] = driver->raw_x * 0.15f; // X-axis
+    driver->mag[1] = driver->raw_y * 0.15f; // Y-axis
+    driver->mag[2] = driver->raw_z * 0.15f; // Z-axis
+
+    mag[0] = driver->mag[0];
+    mag[1] = driver->mag[1];
+    mag[2] = driver->mag[2];
+
+    *temperature = driver->temperature;
 
     return 0;
 }
